@@ -14,3 +14,11 @@ script:
   - (cd omega-target-chromium-extension && grunt release)
   - (cd omega-target-chromium-extension && web-ext -s build lint)
   - (cd omega-target-chromium-extension && web-ext -s build build)
+cache:
+  directories:
+    - omega-build/node_modules
+    - omega-pac/node_modules
+    - omega-web/node_modules
+    - omega-target/node_modules
+    - omega-target-chromium-extension/node_modules
+    - $HOME/.cache/bower
