@@ -1,0 +1,16 @@
+dist: trusty
+language: node_js
+node_js:
+  - "node"
+  - "7"
+  - "6"
+install: cd omega-build && npm run deps && npm run dev
+before_script:
+  - npm install -g grunt-cli web-ext
+script:
+  - cd omega-pac && npm test
+  - cd omega-target && npm test
+  - cd omega-build && grunt
+  - cd omega-target-chromium-extension && grunt release
+  - cd omega-target-chromium-extension && web-ext -s build lint
+  - cd omega-target-chromium-extension && web-ext -s build build
