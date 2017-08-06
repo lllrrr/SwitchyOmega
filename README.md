@@ -5,6 +5,8 @@ Manage and switch between multiple proxies quickly & easily.
 
 [![Translation status](https://hosted.weblate.org/widgets/switchyomega/-/svg-badge.svg)](https://hosted.weblate.org/engage/switchyomega/?utm_source=widget)
 
+[![Build Status](https://travis-ci.org/FelisCatus/SwitchyOmega.svg?branch=master)](https://travis-ci.org/FelisCatus/SwitchyOmega)
+
 Chromium Extension
 ------------------
 The project is available as a Chromium Extension.
