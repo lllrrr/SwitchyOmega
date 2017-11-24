@@ -199,10 +199,21 @@ class ChromeOptions extends OmegaTarget.Options
       @_proxyScriptDisabled = true
     else
       @_proxyScriptState = state
-      @_initWebextProxyScript().then => @_proxyScriptStateChanged()
-    # Proxy authentication is not covered in WebExtensions standard now.
-    # MOZ: Mozilla has a bug tracked to implemented it in PAC return value.
-    # https://bugzilla.mozilla.org/show_bug.cgi?id=1319641
+      Promise.all([
+        browser.runtime.getBrowserInfo(),
+        @_initWebextProxyScript(),
+      ]).then ([info]) =>
+        if info.vendor == 'Mozilla' and info.buildID < '20170918220054'
+          # MOZ: Legacy proxy support expects PAC-like string return type.
+          # TODO(catus): Remove support for string return type.
+          @log.error(
+            'Your browser is outdated! SOCKS5 DNS/Auth unsupported! ' +
+            "Please update your browser ASAP! (Current Build #{info.buildID})")
+          @_proxyScriptState.useLegacyStringReturn = true
+        @_proxyScriptStateChanged()
+    @_proxyAuth ?= new ProxyAuth(this)
+    @_proxyAuth.listen()
+    @_proxyAuth.setProxies(@_watchingProfiles)
     return Promise.resolve()
 
   _proxyScriptInitialized: false
@@ -210,11 +221,23 @@ class ChromeOptions extends OmegaTarget.Options
   _initWebextProxyScript: ->
     if not @_proxyScriptInitialized
       browser.proxy.onProxyError.addListener (err) =>
-        if err and err.message.indexOf('Invalid Proxy Rule: DIRECT') >= 0
-          # DIRECT cannot be parsed in Mozilla earlier due to a bug. Even though
-          # it throws, it actually falls back to direct connection so it works.
-          # https://bugzilla.mozilla.org/show_bug.cgi?id=1355198
-          return
+        if err?.message?
+          if err.message.indexOf('Invalid Proxy Rule: DIRECT') >= 0
+            # DIRECT cannot be parsed in Mozilla earlier due to a bug. Even
+            # though it throws, it actually falls back to direct connection
+            # so it works.
+            # https://bugzilla.mozilla.org/show_bug.cgi?id=1355198
+            return
+          if err.message.indexOf('Return type must be a string') >= 0
+            # MOZ: Legacy proxy support expects PAC-like string return type.
+            # TODO(catus): Remove support for string return type.
+            #
+            @log.error(
+              'Your browser is outdated! SOCKS5 DNS/Auth unsupported! ' +
+              'Please update your browser ASAP!')
+            @_proxyScriptState.useLegacyStringReturn = true
+            @_proxyScriptStateChanged()
+            return
         @log.error(err)
       browser.runtime.onMessage.addListener (message) =>
         return unless message.event == 'proxyScriptLog'
@@ -254,14 +277,12 @@ class ChromeOptions extends OmegaTarget.Options
     })
 
   _quickSwitchInit: false
-  _quickSwitchContextMenuCreated: false
+  _quickSwitchHandlerReady: false
   _quickSwitchCanEnable: false
   setQuickSwitch: (quickSwitch, canEnable) ->
     @_quickSwitchCanEnable = canEnable
-    if not @_quickSwitchContextMenuCreated
-      @_quickSwitchContextMenuCreated = true
-      if quickSwitch
-        chrome.contextMenus?.update('enableQuickSwitch', {checked: true})
+    if not @_quickSwitchHandlerReady
+      @_quickSwitchHandlerReady = true
       window.OmegaContextMenuQuickSwitchHandler = (info) =>
         changes = {}
         changes['-enableQuickSwitch'] = info.checked
@@ -296,6 +317,8 @@ class ChromeOptions extends OmegaTarget.Options
               chrome.tabs.reload(tab.id)
     else
       chrome.browserAction.setPopup({popup: 'popup/index.html'})
+
+    chrome.contextMenus?.update('enableQuickSwitch', {checked: !!quickSwitch})
     Promise.resolve()
 
   setInspect: (settings) ->
